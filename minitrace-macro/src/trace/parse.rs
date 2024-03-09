@@ -6,6 +6,27 @@
 // The input stream comes from the `trace::validate::validate` function.
 // The output vector goes to the `trace::analyze::analyze` function.
 
+/// Represents the scope of a traced item.
+///
+/// The `Scope` enum has two variants: `Local` and `Threads`. `Local` represents a traced item that is local to a function or method, while `Threads` represents a traced item that is shared across threads.
+///
+/// # Examples
+///
+/// ```
+/// let local_scope = Scope::Local;
+/// assert_eq!(local_scope, Scope::Local);
+///
+/// let threads_scope = Scope::Threads;
+/// assert_eq!(threads_scope, Scope::Threads);
+/// ```
+///
+/// # Safety
+///
+/// This enum does not use any unsafe code.
+///
+/// # Panics
+///
+/// This enum does not panic under normal conditions.
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Scope {
@@ -13,6 +34,31 @@ pub enum Scope {
     Threads,
 }
 
+/// Represents a traced item with various attributes.
+///
+/// The `Trace` struct contains fields for different attributes of a traced item, such as its name, whether it's validated, whether it enters on poll, its scope, parent, recorder, whether it recurses, whether it's a root, its variables, and whether it's an async trait or function.
+///
+/// # Examples
+///
+/// ```
+/// let trace = Trace {
+///     default: syn::LitBool::new(true, proc_macro2::Span::call_site()),
+///     name: syn::LitStr::new("my_trace", proc_macro2::Span::call_site()),
+///     validated: syn::LitBool::new(true, proc_macro2::Span::call_site()),
+///     enter_on_poll: syn::LitBool::new(false, proc_macro2::Span::call_site()),
+///     scope: Some(Scope::Local),
+///     // ... and so on for the other fields
+/// };
+/// assert_eq!(trace.name.value(), "my_trace");
+/// ```
+///
+/// # Safety
+///
+/// This struct does not use any unsafe code.
+///
+/// # Panics
+///
+/// This struct does not panic under normal conditions.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Trace {
     pub default: syn::LitBool,
@@ -31,6 +77,39 @@ pub struct Trace {
 }
 
 impl syn::parse::Parse for Trace {
+    /// Implementation of the `syn::parse::Parse` trait for the `Trace` struct.
+    ///
+    /// This implementation allows a `Trace` object to be parsed from a `syn::parse::ParseStream`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Assuming `input` is a syn::parse::ParseStream containing valid data for a Trace
+    /// let trace = syn::parse::Parse::parse(input).unwrap();
+    /// assert_eq!(trace.name.value(), "my_trace");
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if:
+    /// - The input contains more than 3 arguments.
+    /// - The `enter_on_poll` or `name` attributes are provided more than once.
+    /// - The value of `enter_on_poll` is not a boolean.
+    /// - The value of `name` is not a string.
+    /// - An unknown option is provided.
+    /// - Both `enter_on_poll` and `name` are missing.
+    ///
+    /// # Safety
+    ///
+    /// This function does not use any unsafe code.
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic under normal conditions.
+    ///
+    /// # Arguments
+    ///
+    /// `input` - A `syn::parse::ParseStream` from which to parse a `Trace`.
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut enter_on_poll = None;
         let mut name = None;
@@ -139,6 +218,29 @@ impl syn::parse::Parse for Trace {
     }
 }
 
+/// Implementation of the `std::default::Default` trait for the `Trace` struct.
+///
+/// This implementation allows a `Trace` object to be created with default values.
+///
+/// # Examples
+///
+/// ```
+/// let trace = Trace::default();
+/// assert_eq!(trace.name.value(), "__default");
+/// assert_eq!(trace.default.value(), true);
+/// assert_eq!(trace.validated.value(), false);
+/// assert_eq!(trace.enter_on_poll.value(), false);
+/// assert_eq!(trace.scope.unwrap(), Scope::Local);
+/// // ... and so on for the other fields
+/// ```
+///
+/// # Safety
+///
+/// This function does not use any unsafe code.
+///
+/// # Panics
+///
+/// This function does not panic under normal conditions.
 impl Default for Trace {
     fn default() -> Self {
         // Indicate when these defaults have changed

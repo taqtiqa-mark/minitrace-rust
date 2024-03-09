@@ -63,6 +63,11 @@ extern crate proc_macro;
 /// The `#[trace]` attribute requires a local parent context to function correctly. Ensure that
 /// the function annotated with `#[trace]` is called within the scope of `Span::set_local_parent()`.
 ///
+/// # Arguments
+///
+/// * `args`: The `TokenStream` that represents the arguments passed to the `#[trace]` attribute.
+/// * `items`: The `TokenStream` that represents the items the `#[trace]` attribute is applied to.
+///
 /// # Examples
 ///
 /// ```
@@ -110,6 +115,26 @@ extern crate proc_macro;
 ///     .await
 /// }
 /// ```
+///
+/// # Errors
+///
+/// This function does not return any errors. Instead, it appends a compile error to the provided `TokenStream` if parsing fails.
+///
+/// # Safety
+///
+/// This function does not use any unsafe code.
+///
+/// # Panics
+///
+/// This function does not panic under normal conditions. However, it may panic if there's an issue with the underlying `TokenStream` implementation.
+///
+/// # Lifetimes
+///
+/// This function does not deal with lifetimes.
+///
+/// # Returns
+///
+/// Returns the modified `TokenStream`.
 #[proc_macro_attribute]
 pub fn trace(
     args: proc_macro::TokenStream,
@@ -132,10 +157,46 @@ pub fn trace(
     rust.into()
 }
 
-// If any of the steps for this macro fail, we still want to expand to an item
-// that is as close to the expected output as possible.
-// This helps out IDEs such that completions and other related features keep
-// working.
+/// Modifies the provided `TokenStream` by appending a compile error to it.
+///
+/// # Arguments
+///
+/// * `tokens`: The `TokenStream` to which the compile error will be appended.
+/// * `error`: The `syn::Error` that will be transformed into a compile error and appended to the `TokenStream`.
+///
+/// # Examples
+///
+/// ```rust
+/// let error = syn::Error::new(Span::call_site(), "an error occurred");
+/// let tokens = token_stream_with_error(proc_macro2::TokenStream::new(), error);
+/// ```
+///
+/// # Errors
+///
+/// This function does not return any errors. Instead, it appends a compile error to the provided `TokenStream`.
+///
+/// # Safety
+///
+/// This function does not use any unsafe code.
+///
+/// # Panics
+///
+/// This function does not panic under normal conditions. However, it may panic if there's an issue with the underlying `TokenStream` implementation.
+///
+/// # Lifetimes
+///
+/// This function does not deal with lifetimes.
+///
+/// # Returns
+///
+/// Returns the modified `TokenStream`.
+///
+/// # Note
+///
+/// If any of the steps for this macro fail, we still want to expand to an item
+/// that is as close to the expected output as possible.
+/// This helps out IDEs such that completions and other related features keep
+/// working.
 fn token_stream_with_error(
     mut tokens: proc_macro2::TokenStream,
     error: syn::Error,

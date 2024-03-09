@@ -16,12 +16,28 @@ use crate::trace::lower::block::*;
 use crate::trace::lower::quotable::*;
 use crate::trace::lower::signature::*;
 
-// The intermediate representation (IR)
-//
-// The IR is processed by the `quote::quote::quote_spanned!()` macro, hence are
-// stored in a `Quotables<Quotable>` collection.
-// Quotables is a Vec-newtype, implemented as `Models<Model>` was.
-//
+use syn::visit_mut::VisitMut;
+
+/// Lowers the `Models<Model>` into a `Quotables<Quotable>` collection.
+///
+/// The `lower` function is responsible for transforming the high-level `Models<Model>` representation into a lower-level `Quotables<Quotable>` representation, or intermediate representation, that can be processed by the `quote::quote::quote_spanned!()` macro.
+/// Quotables is a Vec-newtype, implemented in the same way as `Models<Model>`.
+///
+/// # Examples
+///
+/// ```
+/// // Assuming `models` is a Models<Model> with at least one Model::Item
+/// let quotes = lower(models);
+/// assert!(quotes.len() > 0);
+/// ```
+///
+/// # Panics
+///
+/// This function will panic if `models` does not contain at least one `Model::Item`.
+///
+/// # Arguments
+///
+/// `models` - A `Models<Model>` object. This should contain at least one `Model::Item`.
 pub fn lower(models: Models<Model>) -> Quotables<Quotable> {
     let mut quotes = Quotables::new();
     quotes.extend(models.iter().map(|model| {
@@ -36,7 +52,25 @@ pub fn lower(models: Models<Model>) -> Quotables<Quotable> {
     quotes
 }
 
-// This was the legacy attribute `fn trace(..)`
+/// Transforms a `TracedItem` into a `Quote`.
+///
+/// The `quote` function is responsible for transforming the high-level `TracedItem` representation into a lower-level `Quote` representation that can be processed by the `quote::quote::quote_spanned!()` macro.
+///
+/// # Examples
+///
+/// ```
+/// // Assuming `traced_item` is a TracedItem with a valid ItemFn
+/// let quote = quote(traced_item);
+/// assert_eq!(quote.ident, "my_function");
+/// ```
+///
+/// # Panics
+///
+/// This function will panic if `traced_item` does not contain a valid `ItemFn`.
+///
+/// # Arguments
+///
+/// `traced_item` - A `TracedItem` object. This should contain a valid `ItemFn`.
 pub fn quote(traced_item: TracedItem) -> Quote {
     let input = traced_item.item_fn.clone();
 
@@ -111,8 +145,28 @@ pub fn quote(traced_item: TracedItem) -> Quote {
     }
 }
 
-use syn::visit_mut::VisitMut;
-
+/// Checks if a function signature contains `self`.
+///
+/// This function uses a visitor pattern to traverse the syntax tree of the function signature and checks if it contains `self`.
+///
+/// # Examples
+///
+/// ```
+/// // Assuming `sig` is a syn::Signature for the function `fn foo(&self)`
+/// assert_eq!(has_self_in_sig(&mut sig), true);
+/// ```
+///
+/// # Safety
+///
+/// This function does not use any unsafe code.
+///
+/// # Panics
+///
+/// This function does not panic under normal conditions.
+///
+/// # Arguments
+///
+/// `sig` - A mutable reference to a `syn::Signature` object. This represents the signature of a function.
 fn has_self_in_sig(sig: &mut syn::Signature) -> bool {
     let mut visitor = HasSelf(false);
     visitor.visit_signature_mut(sig);

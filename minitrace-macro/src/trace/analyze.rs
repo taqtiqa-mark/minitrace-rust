@@ -122,6 +122,39 @@ pub enum Scope {
     //   - `Err(_)` otherwise.
     darling::FromMeta,
 )]
+
+/// A struct representing the parsed attributes of the `#[trace]` macro.
+///
+/// # Arguments
+///
+/// * `name`: The name of the span. Defaults to `None` if not specified.
+/// * `scope`: The scope of the span. Can be `Scope::Local`, `Scope::Thread`, etc. Defaults to `None` if not specified.
+/// * `enter_on_poll`: If `true`, the span will be entered on each poll of the future. Defaults to `None` if not specified.
+/// * `parent`: The name of the parent span. Defaults to `None` if not specified.
+/// * `recorder`: The recorder to use for this span. Defaults to `None` if not specified.
+/// * `recurse`: If `true`, the span will be applied recursively to all called functions. Defaults to `None` if not specified.
+/// * `root`: If `true`, the span will be a root span. Defaults to `None` if not specified.
+/// * `variables`: An array of variables to be recorded. Defaults to `None` if not specified.
+/// * `async_trait`: If `true`, the span will be applied to async trait methods. Defaults to `None` if not specified.
+///
+/// # Examples
+///
+/// ```
+/// #[trace(name = "foo", scope = Scope::Thread, enter_on_poll = true,
+///         parent = "bar", recorder = "baz", recurse = true, root = true,
+///         variables = ["x", "y", "z"], async_trait = true)]
+/// fn foo() {
+///     // ...
+/// }
+/// ```
+///
+/// # Safety
+///
+/// This struct does not use any unsafe code.
+///
+/// # Panics
+///
+/// This struct does not panic under normal conditions. However, it may panic if there's an issue with the underlying `syn` implementation.
 pub struct Trace {
     // Anything that implements `syn::parse::Parse` is supported.
     #[darling(default)]
@@ -147,14 +180,47 @@ pub struct Trace {
     async_trait: Option<syn::LitBool>,
 }
 
-// Produce `Models` (a Vec-newtype)
-//
-// The `Models` container is built based on the attribute parameters
-// held in the `Trace` type.
-//
-// The inputs are:
-// - `meta`: A `syn::Attribute` encapsulated in `TraceAttr`.
-// - `items`: A `proc_macr2::TokenStream`.
+/// Analyzes the provided `Trace` and `TokenStream` and produces a `Models` object.
+///
+/// This function visits each function in the `TokenStream` and merges it with its trace settings.
+/// The trace settings are determined by the `Trace` object.
+///
+/// # Arguments
+///
+/// * `trace`: A `Trace` object that holds the attribute parameters.
+/// * `items`: A `TokenStream` that represents the items the `#[trace]` attribute is applied to.
+///
+/// # Examples
+///
+/// ```
+/// let trace = Trace {
+///     name: Some(syn::LitStr::new("foo", proc_macro2::Span::call_site())),
+///     scope: Some(Scope::Thread),
+///     enter_on_poll: Some(syn::LitBool::new(true, proc_macro2::Span::call_site())),
+///     parent: Some(syn::LitStr::new("bar", proc_macro2::Span::call_site())),
+///     recorder: Some(syn::Ident::new("baz", proc_macro2::Span::call_site())),
+///     recurse: Some(syn::LitBool::new(true, proc_macro2::Span::call_site())),
+///     root: Some(syn::LitBool::new(true, proc_macro2::Span::call_site())),
+///     variables: Some(syn::ExprArray {
+///         attrs: Vec::new(),
+///         bracket_token: syn::token::Bracket(proc_macro2::Span::call_site()),
+///         elems: Punctuated::new(),
+///     }),
+///     async_trait: Some(syn::LitBool::new(true, proc_macro2::Span::call_site())),
+/// };
+///
+/// let items = quote! {
+///     fn foo() {
+///         // ...
+///     }
+/// };
+///
+/// let models = analyze(trace, items.into());
+/// ```
+///
+/// # Panics
+///
+/// This function will panic if the provided `TokenStream` cannot be parsed into a `syn::File`.
 use syn::visit::Visit;
 pub fn analyze(
     //args: std::vec::Vec<syn::NestedMeta>,
@@ -224,49 +290,148 @@ pub fn analyze(
     models
 }
 
-// `Models` are a Vec-newtype
-//
-// A wrapper that allows us to implement *any* trait. As a new-type it rescinds
-// the orphan rule so we have headroom.  Further we can encapsulate or expose
-// Vector functionality as we require.
-//
-// The [`From`] trait provides these conveniences (`match` branch):
-//
-//     Err(err) => return err.into_compile_error().into(),
-//
-// Below the following traits are implemented:
-//
-// - `Debug` (via `#[derive(...)]`)
-// - `Default`
-// - `Deref`
-// - `DerefMut`
-// - `Display`
+/// A newtype wrapper around `Vec<T>` that allows for the implementation of any trait.
+///
+/// This struct is used to circumvent the orphan rule and provides flexibility in terms of encapsulating or exposing
+/// Vector functionality as required.
+///
+/// The `From` trait provides conveniences for handling errors, such as transforming them into compile errors.
+///
+/// The following traits are implemented for this struct:
+///
+/// - `Debug` (via `#[derive(...)]`)
+/// - `Default`
+/// - `Deref`
+/// - `DerefMut`
+/// - `Display`
+///
+/// # Examples
+///
+/// ```
+/// let models: Models<i32> = Models::new();
+/// models.push(1);
+/// models.push(2);
+/// models.push(3);
+/// assert_eq!(models.len(), 3);
+/// ```
+///
+/// # Safety
+///
+/// This struct does not use any unsafe code.
+///
+/// # Panics
+///
+/// This struct does not panic under normal conditions. However, it may panic if there's an issue with the underlying `Vec` implementation.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Models<T>(Vec<T>);
 
+/// Implementation of `Models` struct.
 impl<T: std::fmt::Debug> Models<T> {
+    /// Creates a new `Models` object.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let models: Models<i32> = Models::new();
+    /// assert_eq!(models.len(), 0);
+    /// ```
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic under normal conditions.
     pub fn new() -> Models<T> {
         Models(Vec::<T>::new())
     }
 
+    /// Creates a new `Models` object with the specified capacity.
+    ///
+    /// # Arguments
+    ///
+    /// * `capacity`: The capacity for the new `Models` object.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let models: Models<i32> = Models::with_capacity(10);
+    /// assert_eq!(models.capacity(), 10);
+    /// ```
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the specified capacity causes the system to run out of memory.
     #[allow(dead_code)]
     pub fn with_capacity(capacity: usize) -> Models<T> {
         Models(Vec::<T>::with_capacity(capacity))
     }
 }
 
+/// Provides a `Default` implementation for `Models`.
+///
+/// This implementation calls `Models::new()`, which creates an empty `Models` object.
+///
+/// # Examples
+///
+/// ```
+/// let models: Models<i32> = Default::default();
+/// assert_eq!(models.len(), 0);
+/// ```
+///
+/// # Panics
+///
+/// This function does not panic under normal conditions.
 impl<T: std::fmt::Debug> Default for Models<T> {
     fn default() -> Models<T> {
         Models::new()
     }
 }
 
+/// Provides a `Display` implementation for `Models`.
+///
+/// This implementation uses the `Debug` implementation of the inner type `T` to format the `Models` object.
+///
+/// # Examples
+///
+/// ```
+/// let mut models: Models<i32> = Models::new();
+/// models.push(1);
+/// models.push(2);
+/// models.push(3);
+/// assert_eq!(format!("{}", models), "[1, 2, 3]");
+/// ```
+///
+/// # Errors
+///
+/// This function will return an `Err` if the formatter encounters any errors.
 impl<T: std::fmt::Debug> std::fmt::Display for Models<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self.0)
     }
 }
 
+/// Provides a `Deref` implementation for `Models`.
+///
+/// This implementation allows `Models` to be used wherever `Vec<T>` is expected.
+///
+/// # Examples
+///
+/// ```
+/// let mut models: Models<i32> = Models::new();
+/// models.push(1);
+/// models.push(2);
+/// models.push(3);
+/// assert_eq!(models.len(), 3);
+/// assert_eq!(models[0], 1);
+/// assert_eq!(models[1], 2);
+/// assert_eq!(models[2], 3);
+/// ```
+///
+/// # Safety
+///
+/// This function does not use any unsafe code.
+///
+/// # Panics
+///
+/// This function does not panic under normal conditions. However, it may panic if there's an issue with the underlying `Vec` implementation.
 impl<T: std::fmt::Debug> std::ops::Deref for Models<T> {
     type Target = Vec<T>;
     fn deref(&self) -> &Vec<T> {
@@ -274,12 +439,69 @@ impl<T: std::fmt::Debug> std::ops::Deref for Models<T> {
     }
 }
 
+/// Provides a `DerefMut` implementation for `Models`.
+///
+/// This implementation allows mutable references to `Models` to be used wherever mutable references to `Vec<T>` are expected.
+///
+/// # Examples
+///
+/// ```
+/// let mut models: Models<i32> = Models::new();
+/// models.push(1);
+/// models.push(2);
+/// models.push(3);
+/// models[0] = 4;
+/// models[1] = 5;
+/// models[2] = 6;
+/// assert_eq!(models[0], 4);
+/// assert_eq!(models[1], 5);
+/// assert_eq!(models[2], 6);
+/// ```
+///
+/// # Safety
+///
+/// This function does not use any unsafe code.
+///
+/// # Panics
+///
+/// This function does not panic under normal conditions. However, it may panic if there's an issue with the underlying `Vec` implementation.
 impl<T: std::fmt::Debug> std::ops::DerefMut for Models<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
+/// `TracedItem` is a struct that holds the parsed attributes and the function to be traced.
+///
+/// This struct is used to hold the parsed attributes from the `#[trace(...)]` macro and the function that the macro is applied to.
+/// The attributes are used to control the behavior of the tracing macro.
+///
+/// # Examples
+///
+/// ```
+/// // Assuming `fn_to_trace` is a syn::ItemFn and `attrs` is a syn::AttributeArgs
+/// let traced_item = TracedItem {
+///     name: syn::LitStr::new("fn_to_trace", proc_macro2::Span::call_site()),
+///     scope: crate::trace::parse::Scope::Thread,
+///     enter_on_poll: syn::LitBool::new(true, proc_macro2::Span::call_site()),
+///     parent: syn::LitStr::new("", proc_macro2::Span::call_site()),
+///     recorder: syn::Ident::new("recorder", proc_macro2::Span::call_site()),
+///     recurse: syn::LitBool::new(false, proc_macro2::Span::call_site()),
+///     root: syn::LitBool::new(false, proc_macro2::Span::call_site()),
+///     variables: syn::ExprArray {
+///         attrs: attrs,
+///         bracket_token: syn::token::Bracket(proc_macro2::Span::call_site()),
+///         elems: proc_macro2::Punctuated::new(),
+///     },
+///     async_trait: syn::LitBool::new(false, proc_macro2::Span::call_site()),
+///     async_fn: syn::LitBool::new(true, proc_macro2::Span::call_site()),
+///     item_fn: fn_to_trace,
+/// };
+/// ```
+///
+/// # Safety
+///
+/// This struct does not use any unsafe code.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TracedItem {
     // These are the fields parsed as AttributeArgs into the `Trace` struct
@@ -299,6 +521,23 @@ pub struct TracedItem {
     pub item_fn: syn::ItemFn,
 }
 
+/// `Model` is an enum that represents the different types of models that can be analyzed.
+///
+/// This enum is used to represent either an `Attribute` or an `Item`. The `Attribute` variant holds a `Trace` object,
+/// while the `Item` variant holds a `TracedItem` object. The `Item` variant is boxed to satisfy the
+/// `clippy::large-enum-variant` lint which is triggered by CI settings.
+///
+/// # Examples
+///
+/// ```
+/// // Assuming `trace` is a Trace object and `traced_item` is a TracedItem object
+/// let model_attribute = Model::Attribute(trace);
+/// let model_item = Model::Item(Box::new(traced_item));
+/// ```
+///
+/// # Errors
+///
+/// This enum has a `thiserror::Error` derive, and it will return "Validation logic error" if it's used as an error.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 #[error("Validation logic error")]
 pub enum Model {
@@ -307,13 +546,52 @@ pub enum Model {
     Item(Box<TracedItem>),
 }
 
-// The FnVisitor is used to populate `Models` (a Vec-newtype) when
-// `#[trace(recurse=all|public|private)]` on a function or, eventually,
-// a module.
+/// `FnVisitor` is a struct used to populate `Models` (a Vec-newtype) when
+/// `#[trace(recurse=all|public|private)]` is applied on a function or, eventually,
+/// a module.
+///
+/// This struct holds a vector of references to `syn::ItemFn` objects, which represent the functions
+/// that are being visited.
+///
+/// # Examples
+///
+/// ```
+/// // Assuming `item_fns` is a Vec<&syn::ItemFn>
+/// let fn_visitor = FnVisitor {
+///     functions: item_fns,
+/// };
+/// ```
+///
+/// # Lifetimes
+///
+/// `'ast` - Represents the lifetime of the abstract syntax tree. This is the lifetime of the references to the `syn::ItemFn` objects.
+///
+/// # Arguments
+///
+/// `functions` - A vector of references to `syn::ItemFn` objects. These represent the functions that are being visited.
 struct FnVisitor<'ast> {
     functions: Vec<&'ast syn::ItemFn>,
 }
 
+/// Visits a function item in the syntax tree.
+///
+/// This method is part of the `syn::visit::Visit` trait implementation for `FnVisitor`. It is called when a function item is encountered in the syntax tree. The function item is added to the `functions` vector of the `FnVisitor`.
+///
+/// # Examples
+///
+/// ```
+/// // Assuming `fn_visitor` is a FnVisitor and `item_fn` is a syn::ItemFn
+/// fn_visitor.visit_item_fn(&item_fn);
+/// assert!(fn_visitor.functions.contains(&item_fn));
+/// ```
+///
+/// # Lifetimes
+///
+/// `'ast` - Represents the lifetime of the abstract syntax tree. This is the lifetime of the references to the `syn::ItemFn` objects.
+///
+/// # Arguments
+///
+/// `node` - A reference to the function item that is being visited.
 impl<'ast> syn::visit::Visit<'ast> for FnVisitor<'ast> {
     fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
         self.functions.push(node);
@@ -322,10 +600,32 @@ impl<'ast> syn::visit::Visit<'ast> for FnVisitor<'ast> {
     }
 }
 
-// Needed when we do convenient things like this (`match` branch):
-//
-//     Err(err) => return err.into_compile_error().into(),
-//
+/// Provides a `From<proc_macro2::TokenStream>` implementation for `Model`.
+///
+/// This implementation allows a `proc_macro2::TokenStream` to be converted into a `Model::Attribute` with default values.
+///
+/// # Examples
+///
+/// ```
+/// // Assuming `token_stream` is a proc_macro2::TokenStream
+/// let model: Model = token_stream.into();
+/// match model {
+///     Model::Attribute(attribute) => assert_eq!(attribute, Trace::default()),
+///     _ => panic!("Expected Model::Attribute"),
+/// }
+/// ```
+///
+/// # Safety
+///
+/// This function does not use any unsafe code.
+///
+/// # Panics
+///
+/// This function does not panic under normal conditions. However, it may panic if there's an issue with the `Default` implementation for `Trace`.
+///
+/// # Arguments
+///
+/// `_inner` - The `proc_macro2::TokenStream` that is being converted into a `Model`. This argument is currently unused.
 impl std::convert::From<proc_macro2::TokenStream> for Model {
     fn from(_inner: proc_macro2::TokenStream) -> Model {
         let attribute = Default::default();
@@ -333,10 +633,33 @@ impl std::convert::From<proc_macro2::TokenStream> for Model {
     }
 }
 
-// In the model of the `#[trace]` proc-macro-attribute, the attribute data
-// only appears once.  We can have multiple `syn::Item` entries.
-// For example:
-//
+/// Provides a `From<proc_macro2::TokenStream>` implementation for `Models<Model>`.
+///
+/// This implementation allows a `proc_macro2::TokenStream` to be converted into a `Models<Model>` with a single `Model::Attribute` with default values.
+///
+/// # Examples
+///
+/// ```
+/// // Assuming `token_stream` is a proc_macro2::TokenStream
+/// let models: Models<Model> = token_stream.into();
+/// assert_eq!(models.len(), 1);
+/// match &models[0] {
+///     Model::Attribute(attribute) => assert_eq!(attribute, &Trace::default()),
+///     _ => panic!("Expected Model::Attribute"),
+/// }
+/// ```
+///
+/// # Safety
+///
+/// This function does not use any unsafe code.
+///
+/// # Panics
+///
+/// This function does not panic under normal conditions. However, it may panic if there's an issue with the `Default` implementation for `Trace`.
+///
+/// # Arguments
+///
+/// `_inner` - The `proc_macro2::TokenStream` that is being converted into a `Models<Model>`. This argument is currently unused.
 impl std::convert::From<proc_macro2::TokenStream> for Models<Model> {
     fn from(_inner: proc_macro2::TokenStream) -> Models<Model> {
         let attribute = Default::default();
@@ -346,6 +669,27 @@ impl std::convert::From<proc_macro2::TokenStream> for Models<Model> {
     }
 }
 
+/// Provides a `Default` implementation for `Trace`.
+///
+/// This implementation creates a `Trace` object with default values. The `name`, `scope`, `enter_on_poll`, `recorder`, `recurse`, `root`, `variables`, `parent`, and `async_trait` fields are all set to some default value.
+///
+/// # Examples
+///
+/// ```
+/// let trace = Trace::default();
+/// assert_eq!(trace.name, Some(syn::LitStr::new("__default", proc_macro2::Span::call_site())));
+/// assert_eq!(trace.scope, Some(Scope::Local));
+/// assert_eq!(trace.enter_on_poll, Some(syn::LitBool::new(false, proc_macro2::Span::call_site())));
+/// // ... and so on for the other fields
+/// ```
+///
+/// # Safety
+///
+/// This function does not use any unsafe code.
+///
+/// # Panics
+///
+/// This function does not panic under normal conditions. However, it may panic if there's an issue with the `new` function for `syn::LitStr`, `syn::LitBool`, or `syn::Ident`.
 impl Default for Trace {
     fn default() -> Self {
         // let scope = proc_macro2::Ident::new("Local", proc_macro2::Span::call_site());
@@ -383,6 +727,27 @@ impl Default for Trace {
     }
 }
 
+/// Provides a `Default` implementation for `TracedItem`.
+///
+/// This implementation creates a `TracedItem` object with default values. The `name`, `scope`, `enter_on_poll`, `item_fn`, `recorder`, `recurse`, `root`, `variables`, `parent`, `async_trait`, and `async_fn` fields are all set to some default value.
+///
+/// # Examples
+///
+/// ```
+/// let traced_item = TracedItem::default();
+/// assert_eq!(traced_item.name.value(), "__default");
+/// assert_eq!(traced_item.scope, crate::trace::parse::Scope::Local);
+/// assert_eq!(traced_item.enter_on_poll.value(), false);
+/// // ... and so on for the other fields
+/// ```
+///
+/// # Safety
+///
+/// This function does not use any unsafe code.
+///
+/// # Panics
+///
+/// This function does not panic under normal conditions. However, it may panic if there's an issue with the `new` function for `syn::LitStr`, `syn::LitBool`, or `syn::Ident`.
 impl Default for TracedItem {
     fn default() -> Self {
         // let scope = proc_macro2::Ident::new("Local", proc_macro2::Span::call_site());

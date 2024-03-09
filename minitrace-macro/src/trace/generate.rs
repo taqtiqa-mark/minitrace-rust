@@ -2,13 +2,25 @@ use crate::trace::Quotable;
 use crate::trace::Quotables;
 use crate::trace::Quote;
 
-// Generate TokenStream to be returned by the proc-macro
-//
-// The "Lower" stage is responsible for turning the "Model" data into a
-// syn::Item that can be reported here. Currently this is straight forward.
-// However, if additional attribute features are implemented there will likely
-// be some additional complexity here that will help to cut down compile times.
-// See issues:
+/// Generates a `proc_macro2::TokenStream` to be returned by the proc-macro.
+///
+/// The "Lower" stage is responsible for turning the "Model" data into a `syn::Item` that can be reported here. Currently this is straight forward. However, if additional attribute features are implemented there will likely be some additional complexity here that will help to cut down compile times.
+///
+/// # Examples
+///
+/// ```
+/// // Assuming `quotes` is a Quotables<Quotable> with at least one Quotable::Item
+/// let token_stream = generate(quotes);
+/// assert!(token_stream.to_string().starts_with("fn"));
+/// ```
+///
+/// # Panics
+///
+/// This function will panic if `quotes` does not contain at least one `Quotable::Item`.
+///
+/// # Arguments
+///
+/// `quotes` - A `Quotables<Quotable>` object. This should contain at least one `Quotable::Item`.
 pub fn generate(quotes: Quotables<Quotable>) -> proc_macro2::TokenStream {
     // Have a logic check earlier to error if there is not **at least one**
     // `Quotable::Item`
@@ -41,6 +53,7 @@ pub fn generate(quotes: Quotables<Quotable>) -> proc_macro2::TokenStream {
     };
     ts
 }
+
 #[cfg(test)]
 mod tests {
     use test_utilities::*;
